@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -34,7 +35,7 @@ func downloadFiles() {
 	defer completeLog.Close()
 
 	//read input list
-	listBytes, err := os.ReadFile("./list.txt")
+	listBytes, err := ioutil.ReadFile("./list.txt")
 	if err != nil {
 		log.Println("error reading list:", err.Error())
 		os.Exit(1)
@@ -42,7 +43,7 @@ func downloadFiles() {
 	itemsList := strings.Split(strings.ReplaceAll(string(listBytes), "\r", "\n"), "\n")
 
 	//read completedList
-	completedListBytes, err := os.ReadFile(completedLogName)
+	completedListBytes, err := ioutil.ReadFile(completedLogName)
 	if err != nil {
 		log.Println("error reading list:", err.Error())
 		os.Exit(1)
@@ -75,7 +76,7 @@ func downloadFiles() {
 	}
 
 	//set event log
-	logFileName := "./logs/logs-" + nowTime.Format("2006-01-02T15:04:05") + ".txt"
+	logFileName := filepath.FromSlash("./logs/logs-" + nowTime.Format("2006-01-02T15:04:05") + ".txt")
 	eventLog, err := os.OpenFile(logFileName, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
 		log.Fatalf("error opening file: %v", err)
