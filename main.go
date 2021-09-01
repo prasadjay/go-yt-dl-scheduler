@@ -15,8 +15,8 @@ import (
 const (
 	START_HOUR            int = 00
 	END_HOUR              int = 8
-	DOWNLOAD_WAIT_SECONDS     = 5 //120
-	TIME_CHECK_SECONDS        = 5 //60
+	DOWNLOAD_WAIT_SECONDS     = 120 //120
+	TIME_CHECK_SECONDS        = 60  //60
 )
 
 func main() {
@@ -87,9 +87,8 @@ func downloadFiles() {
 	log.Println("Process started at:", nowTime.Format(time.RFC3339))
 
 	for true {
-		//nowTimeHour := time.Now().Hour()
-		//if nowTimeHour >= START_HOUR && nowTimeHour < END_HOUR {
-		if true {
+		nowTimeHour := time.Now().Hour()
+		if nowTimeHour >= START_HOUR && nowTimeHour < END_HOUR {
 			if len(itemMap) == 0 {
 				log.Println("completed all downloads.. exiting @ ", nowTime.Format("2006-01-02T15:04:05"))
 				os.Exit(0)
