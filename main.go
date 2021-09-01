@@ -76,7 +76,7 @@ func downloadFiles() {
 	}
 
 	//set event log
-	logFileName := filepath.FromSlash("./logs/logs-" + nowTime.Format("2006-01-02T15:04:05") + ".txt")
+	logFileName := filepath.FromSlash("logs/logs-" + nowTime.Format("2006-01-02T15-04-05") + ".txt")
 	eventLog, err := os.OpenFile(logFileName, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
 		log.Fatalf("error opening file: %v", err)
