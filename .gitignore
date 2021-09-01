@@ -3,3 +3,7 @@ node_modules/
 bin/
 .serverless/
 **/.DS_Store
+downloaded_videos/
+merge_video_inputs/
+merge_video_outputs/
+logs*
