@@ -1,0 +1,7 @@
+{
+  "force_run": true,
+  "start_hour": 0,
+  "end_hour": 8,
+  "download_wait_seconds": 120,
+  "time_check_seconds": 60
+}

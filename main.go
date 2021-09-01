@@ -12,19 +12,32 @@ import (
 	"time"
 )
 
-const (
-	START_HOUR            int = 00
-	END_HOUR              int = 8
-	DOWNLOAD_WAIT_SECONDS     = 120 //120
-	TIME_CHECK_SECONDS        = 60  //60
-)
-
 func main() {
 	downloadFiles()
 }
 
+type AppConfig struct {
+	ForceRun            bool `json:"force_run"`
+	StartHour           int  `json:"start_hour"`
+	EndHour             int  `json:"end_hour"`
+	DownloadWaitSeconds int  `json:"download_wait_seconds"`
+	TimeCheckSeconds    int  `json:"time_check_seconds"`
+}
+
+var config AppConfig
+
 func downloadFiles() {
 	nowTime := time.Now()
+
+	//read config
+	configBytes, err := ioutil.ReadFile("./config.json")
+	if err != nil {
+		log.Println("error reading list:", err.Error())
+		os.Exit(1)
+	}
+	fmt.Println("CONFIG : ", string(configBytes))
+	_ = json.Unmarshal(configBytes, &config)
+	fmt.Println("PARSED CONFIG : ", config)
 
 	//open completed log
 	completedLogName := "./completed_list.json"
@@ -64,6 +77,7 @@ func downloadFiles() {
 	}
 
 	for _, value := range itemsList {
+		value = strings.TrimPrefix(strings.Split(value, "&")[0], "https://www.youtube.com/watch?v=")
 		if _, ok := completedList[value]; !ok {
 			itemMap[value] = value
 		}
@@ -88,8 +102,9 @@ func downloadFiles() {
 
 	for true {
 		nowTimeHour := time.Now().Hour()
-		if nowTimeHour >= START_HOUR && nowTimeHour < END_HOUR {
+		if nowTimeHour >= config.StartHour && nowTimeHour < config.EndHour || config.ForceRun {
 			if len(itemMap) == 0 {
+				fmt.Println("completed all downloads.. exiting @ ", nowTime.Format("2006-01-02T15:04:05"))
 				log.Println("completed all downloads.. exiting @ ", nowTime.Format("2006-01-02T15:04:05"))
 				os.Exit(0)
 			}
@@ -131,7 +146,7 @@ func downloadFiles() {
 			waitForNextDownload()
 		} else {
 			fmt.Println("Waiting till midnight...")
-			time.Sleep(TIME_CHECK_SECONDS * time.Second)
+			time.Sleep(time.Duration(config.TimeCheckSeconds) * time.Second)
 			continue
 		}
 	}
@@ -139,7 +154,7 @@ func downloadFiles() {
 
 func waitForNextDownload() {
 	fmt.Println("waiting...")
-	time.Sleep(DOWNLOAD_WAIT_SECONDS * time.Second)
+	time.Sleep(time.Duration(config.DownloadWaitSeconds) * time.Second)
 	fmt.Println("Proceed to next download...\n")
 }
 
