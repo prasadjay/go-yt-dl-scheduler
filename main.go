@@ -101,9 +101,12 @@ func downloadFiles() {
 
 	log.Println("Process started at:", nowTime.Format(time.RFC3339))
 
+	isMidnightSet := false
+
 	for true {
 		nowTimeHour := time.Now().Hour()
 		if nowTimeHour >= config.StartHour && nowTimeHour < config.EndHour || config.ForceRun {
+			isMidnightSet = false
 			if len(itemMap) == 0 {
 				fmt.Println("completed all downloads.. exiting @ ", nowTime.Format("2006-01-02T15:04:05"))
 				log.Println("completed all downloads.. exiting @ ", nowTime.Format("2006-01-02T15:04:05"))
@@ -146,7 +149,10 @@ func downloadFiles() {
 
 			waitForNextDownload()
 		} else {
-			fmt.Println("Waiting till midnight...")
+			if !isMidnightSet {
+				fmt.Println("Waiting till midnight...")
+			}
+			isMidnightSet = true
 			time.Sleep(time.Duration(config.TimeCheckSeconds) * time.Second)
 			continue
 		}
