@@ -121,7 +121,7 @@ func downloadFiles() {
 			}
 			//do the thing
 			fmt.Println("Downloading item : ", item)
-			cmd := exec.Command("youtube-dl", "-i", "\""+item+"\"", "-f", "137+140")
+			cmd := exec.Command("youtube-dl", "-i", item, "-f", "137+140")
 			err = cmd.Run()
 			if err != nil {
 				fmt.Println("Download error: ", err.Error())
