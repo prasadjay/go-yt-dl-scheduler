@@ -77,7 +77,8 @@ func downloadFiles() {
 	}
 
 	for _, value := range itemsList {
-		value = strings.TrimPrefix(strings.Split(value, "&")[0], "https://www.youtube.com/watch?v=")
+		//value = strings.TrimPrefix(strings.Split(value, "&")[0], "https://www.youtube.com/watch?v=")
+		value = strings.Split(value, "&")[0]
 		if _, ok := completedList[value]; !ok {
 			itemMap[value] = value
 		}
@@ -117,7 +118,7 @@ func downloadFiles() {
 			}
 			//do the thing
 			fmt.Println("Downloading item : ", item)
-			cmd := exec.Command("youtube-dl", "-i", item, "-f", "137+140")
+			cmd := exec.Command("youtube-dl", "-i", "\""+item+"\"", "-f", "137+140")
 			err = cmd.Run()
 			if err != nil {
 				fmt.Println("Download error: ", err.Error())
