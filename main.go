@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -11,10 +10,6 @@ import (
 	"strings"
 	"time"
 )
-
-func main() {
-	downloadFiles()
-}
 
 type AppConfig struct {
 	ForceRun            bool `json:"force_run"`
@@ -26,132 +21,172 @@ type AppConfig struct {
 
 var config AppConfig
 
+const (
+	logsDir          = "logs"
+	configDir        = "config.json"
+	urlListDir       = "list.txt"
+	completedListDir = "completed_list.json"
+	videosDir        = "downloaded_videos"
+)
+
+func init() {
+	var err error
+	_, err = os.Stat(logsDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			os.Mkdir(logsDir, 0777)
+		}
+	}
+	_, err = os.Stat(videosDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			os.Mkdir(videosDir, 0777)
+		}
+	}
+}
+
+func main() {
+	downloadFiles()
+}
+
 func downloadFiles() {
 	nowTime := time.Now()
 
-	//read config
-	configBytes, err := ioutil.ReadFile("./config.json")
+	// Read current config.
+	configBytes, err := os.ReadFile(configDir)
 	if err != nil {
-		log.Println("error reading list:", err.Error())
-		os.Exit(1)
+		log.Fatalln("Error reading list:\n\t", err.Error())
 	}
-	fmt.Println("CONFIG : ", string(configBytes))
-	_ = json.Unmarshal(configBytes, &config)
-	fmt.Println("PARSED CONFIG : ", config)
+	fmt.Println("\nCURRENT CONFIG : \n", string(configBytes))
 
-	//open completed log
-	completedLogName := "./completed_list.json"
-	completeLog, err := os.OpenFile(completedLogName, os.O_RDWR, 0666)
+	err = json.Unmarshal(configBytes, &config)
 	if err != nil {
-		log.Fatalf("error opening file: %v", err)
+		log.Fatalln("Error unmarshalling", configDir, "\n\t", err)
 	}
-	defer completeLog.Close()
 
-	//read input list
-	listBytes, err := ioutil.ReadFile("./list.txt")
+	// Read input list.
+	inputList, err := os.ReadFile(urlListDir)
 	if err != nil {
-		log.Println("error reading list:", err.Error())
-		os.Exit(1)
+		log.Fatalln("Error reading", urlListDir, "\n\t", err.Error())
 	}
-	itemsList := strings.Split(strings.ReplaceAll(string(listBytes), "\r", "\n"), "\n")
 
-	//read completedList
-	completedListBytes, err := ioutil.ReadFile(completedLogName)
+	//urlList := strings.Split(strings.ReplaceAll(strings.TrimSpace(string(inputList)), "\r", "\n"), "\n")
+	urlList := strings.Split(strings.TrimSpace(string(inputList)), "\n")
+
+	// Open and read a list of completed downloads.
+	completedLog, err := os.OpenFile(completedListDir, os.O_RDWR, 0666)
 	if err != nil {
-		log.Println("error reading list:", err.Error())
-		os.Exit(1)
+		log.Fatalf("Error opening file: %v", "\n\t", err)
 	}
+	defer completedLog.Close()
+
+	completedListBytes, err := os.ReadFile(completedListDir)
+	if err != nil {
+		log.Fatalln("Error reading", completedListDir, "\n\t", err.Error())
+	}
+
 	completedList := make(map[string]string)
 	err = json.Unmarshal(completedListBytes, &completedList)
 	if err != nil {
-		fmt.Println("Error reading completed list : ", err.Error())
+		log.Println("Error unmarshalling", completedListDir, "\n\t", err.Error())
 		return
 	}
 
-	itemMap := make(map[string]string)
-
-	if len(itemsList) == 1 && itemsList[0] == "" {
-		fmt.Println("Empty list... exiting in 10 seconds...")
-		time.Sleep(10 * time.Second)
-		os.Exit(0)
+	if len(urlList) == 1 && urlList[0] == "" {
+		log.Println("[ERROR]:", urlListDir, "is empty!")
+		return
 	}
 
-	for _, value := range itemsList {
-		//value = strings.TrimPrefix(strings.Split(value, "&")[0], "https://www.youtube.com/watch?v=")
-		value = strings.Split(value, "&")[0]
+	urlMap := make(map[string]string)
+	for _, value := range urlList {
+		//value = strings.TrimPrefix(strings.Split(value, "\n")[0], "https://www.youtube.com/watch?v=")
+		value = strings.Split(strings.TrimSpace(value), "\n")[0]
 		if _, ok := completedList[value]; !ok {
-			itemMap[value] = value
+			urlMap[value] = value
+		}
+		if value == "" {
+			delete(urlMap, value)
 		}
 	}
 
-	if len(itemMap) == 0 {
-		fmt.Println("Nothing to download... exiting in 10 seconds...")
-		time.Sleep(10 * time.Second)
-		os.Exit(0)
+	if len(urlMap) == 0 {
+		log.Fatalln("Nothing to download! Add link(s) to the", urlListDir, "file!")
 	}
 
-	//set event log
-	logFileName := filepath.FromSlash("logs/logs-" + nowTime.Format("2006-01-02T15-04-05") + ".txt")
+	// Set event log.
+	logFileName := filepath.FromSlash(logsDir + "/log-" + nowTime.Format("2006-01-02T15-04-05") + ".txt")
 	eventLog, err := os.OpenFile(logFileName, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
-		log.Fatalf("error opening file: %v", err)
+		log.Fatalf("Error opening file: %v", err)
 	}
 	defer eventLog.Close()
-	log.SetOutput(eventLog)
 
+	log.SetOutput(eventLog)
 	log.Println("Process started at:", nowTime.Format(time.RFC3339))
 
-	isMidnightSet := false
-
-	for true {
+	var isMidnightSet bool
+	for {
 		nowTimeHour := time.Now().Hour()
 		if nowTimeHour >= config.StartHour && nowTimeHour < config.EndHour || config.ForceRun {
 			isMidnightSet = false
-			if len(itemMap) == 0 {
-				fmt.Println("completed all downloads.. exiting @ ", nowTime.Format("2006-01-02T15:04:05"))
-				log.Println("completed all downloads.. exiting @ ", nowTime.Format("2006-01-02T15:04:05"))
+			if len(urlMap) == 0 {
+				fmt.Println("All downloads completed at", nowTime.Format("2006-01-02 15:04:05"))
+				log.Println("All downloads completed at", nowTime.Format("2006-01-02 15:04:05"))
 				os.Exit(0)
 			}
 
-			fmt.Println("Pending items: ", itemMap)
-			item := ""
-			for k := range itemMap {
-				item = k
+			var videoUrl string
+			for k, _ := range urlMap {
+				videoUrl = k
 				break
 			}
-			//do the thing
-			fmt.Println("Downloading item : ", item)
-			cmd := exec.Command("youtube-dl", "-i", item, "-f", "137+140")
-			err = cmd.Run()
-			if err != nil {
-				fmt.Println("Download error: ", err.Error())
-				log.Println("Download error : " + item + " : " + err.Error())
-				//delete from map
-				delete(itemMap, item)
-				waitForNextDownload()
-				continue
-			}
-			//delete from map
-			delete(itemMap, item)
-			//add to completed map
-			completedList[item] = time.Now().Format("2006-01-02T15:04:05")
-			b, err := json.Marshal(completedList)
-			if err != nil {
-				log.Println("exiting reason @ list marshal : ", err.Error())
-			}
-			//write to completed file
-			_ = completeLog.Truncate(0)
-			_, _ = completeLog.Seek(0, 0)
-			_, err = completeLog.Write(b)
-			if err != nil {
-				log.Println("exiting reason @ list write to log : ", err.Error())
+
+			// Download video
+			fmt.Println("Downloading:", videoUrl)
+			if len(urlMap)-1 > 0 {
+				fmt.Println("Pending URLs:", len(urlMap)-1)
 			}
 
-			waitForNextDownload()
-		} else {
-			if !isMidnightSet {
-				fmt.Println("Waiting till midnight...")
+			os.Chdir(videosDir)
+			err := exec.Command("youtube-dl", "-i", videoUrl, "-f", "137+140").Run()
+			os.Chdir("..")
+			if err != nil {
+				fmt.Println("Error downloading", videoUrl, "\n\t", err.Error(), "\n")
+				log.Println("Error downloading", videoUrl, "\n\t", err.Error())
+
+				delete(urlMap, videoUrl) // Delete broken link from map.
+
+				if len(urlMap) > 0 {
+					waitForNextDownload(len(urlMap))
+					continue
+				} else {
+					return
+				}
 			}
+
+			delete(urlMap, videoUrl) // Delete link from map.
+			fmt.Println("Downloaded successfully.\n")
+
+			// Add completed download to list.
+			completedList[videoUrl] = time.Now().Format("2006-01-02T15:04:05")
+			completedDownload, err := json.Marshal(completedList)
+			if err != nil {
+				fmt.Println("Error marshalling", completedList, "\n\t", err.Error())
+				log.Println("Error marshalling", completedList, "\n\t", err.Error())
+			}
+
+			// Write completed download to file.
+			completedLog.Truncate(0)
+			completedLog.Seek(0, 0)
+			_, err = completedLog.Write(completedDownload)
+			if err != nil {
+				log.Println("Error writing to", completedList, "\n\t", err.Error())
+				log.Println("Error writing to", completedList, "\n\t", err.Error())
+			}
+			waitForNextDownload(len(urlMap))
+
+		} else if !isMidnightSet {
+			fmt.Println("\nWaiting till midnight...")
 			isMidnightSet = true
 			time.Sleep(time.Duration(config.TimeCheckSeconds) * time.Second)
 			continue
@@ -159,30 +194,30 @@ func downloadFiles() {
 	}
 }
 
-func waitForNextDownload() {
-	fmt.Println("waiting...")
-	time.Sleep(time.Duration(config.DownloadWaitSeconds) * time.Second)
-	fmt.Println("Proceed to next download...\n")
+func waitForNextDownload(mapLength int) {
+	if mapLength > 1 {
+		fmt.Println("Waiting for the next download...")
+		time.Sleep(time.Duration(config.DownloadWaitSeconds) * time.Second)
+		fmt.Println("Proceed...\n")
+	}
 }
 
-func joinFiles() {
+/*func joinFiles() {
 	fmt.Println("STARTING....\n")
-	files, err := ioutil.ReadDir("./videos")
+	files, err := os.ReadDir(videosDir)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	for _, f := range files {
 		if strings.HasSuffix(f.Name(), "mp4") {
-			videoPath := "./videos/" + f.Name()
-			audioPath := "./videos/" + strings.TrimSuffix(f.Name(), "f137.mp4") + "f140.m4a"
-			outputName := "./" + strings.TrimSuffix(f.Name(), "f137.mp4") + "mp4"
-			cmd := exec.Command("ffmpeg", "-i", videoPath, "-i", audioPath, "-c", "copy", outputName)
-			err = cmd.Run()
+			videoPath := videosDir + f.Name()
+			audioPath := videosDir + strings.TrimSuffix(f.Name(), "f137.mp4") + "f140.m4a"
+			outputName := videosDir + strings.TrimSuffix(f.Name(), "f137.mp4") + "mp4"
+			err := exec.Command("ffmpeg", "-i", videoPath, "-i", audioPath, "-c", "copy", outputName).Run()
 			if err != nil {
-				fmt.Println("ERROR: ", videoPath, " : ", err.Error())
-				os.Exit(0)
+				log.Fatalln("ERROR:", videoPath, ":", err.Error())
 			}
 		}
 	}
-}
+}*/
